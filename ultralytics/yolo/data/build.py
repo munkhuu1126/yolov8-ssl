@@ -66,8 +66,8 @@ def seed_worker(worker_id):  # noqa
 
 def build_dataloader(cfg, batch, img_path, data_info, stride=32, rect=False, rank=-1, mode='train'):
     """Return an InfiniteDataLoader or DataLoader for training or validation set."""
-    assert mode in ['train', 'val']
-    shuffle = mode == 'train'
+    assert mode in ['train', 'val', 'unlabeled']
+    shuffle = mode == 'train' or mode == 'unlabeled'
     if cfg.rect and shuffle:
         LOGGER.warning("WARNING ⚠️ 'rect=True' is incompatible with DataLoader shuffle, setting shuffle=False")
         shuffle = False
@@ -76,7 +76,7 @@ def build_dataloader(cfg, batch, img_path, data_info, stride=32, rect=False, ran
             img_path=img_path,
             imgsz=cfg.imgsz,
             batch_size=batch,
-            augment=mode == 'train',  # augmentation
+            augment=mode == 'train' or mode == 'unlabeled',  # augmentation
             hyp=cfg,  # TODO: probably add a get_hyps_from_cfg function
             rect=cfg.rect or rect,  # rectangular batches
             cache=cfg.cache or None,
@@ -87,11 +87,12 @@ def build_dataloader(cfg, batch, img_path, data_info, stride=32, rect=False, ran
             use_segments=cfg.task == 'segment',
             use_keypoints=cfg.task == 'pose',
             classes=cfg.classes,
+            mode= mode,
             data=data_info)
 
     batch = min(batch, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
-    workers = cfg.workers if mode == 'train' else cfg.workers * 2
+    workers = cfg.workers if mode == 'train' or 'unlabeled' else cfg.workers * 2
     nw = min([os.cpu_count() // max(nd, 1), batch if batch > 1 else 0, workers])  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     loader = DataLoader if cfg.image_weights or cfg.close_mosaic else InfiniteDataLoader  # allow attribute updates

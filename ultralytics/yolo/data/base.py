@@ -58,17 +58,19 @@ class BaseDataset(Dataset):
                  stride=32,
                  pad=0.5,
                  single_cls=False,
-                 classes=None):
+                 classes=None,
+                 mode=None):
         super().__init__()
         self.img_path = img_path
         self.imgsz = imgsz
-        self.augment = augment
+        self.augment = True #change here
         self.single_cls = single_cls
         self.prefix = prefix
         self.im_files = self.get_img_files(self.img_path)
         self.labels = self.get_labels()
         self.update_labels(include_class=classes)  # single_cls and include_class
         self.ni = len(self.labels)  # number of images
+            
         self.rect = rect
         self.batch_size = batch_size
         self.stride = stride

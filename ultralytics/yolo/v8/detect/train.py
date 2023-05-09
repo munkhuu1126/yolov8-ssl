@@ -30,15 +30,15 @@ class DetectionTrainer(BaseTrainer):
                                  batch_size=batch_size,
                                  stride=gs,
                                  hyp=vars(self.args),
-                                 augment=mode == 'train',
+                                 augment=mode == 'train' or mode == 'unlabeled',
                                  cache=self.args.cache,
-                                 pad=0 if mode == 'train' else 0.5,
+                                 pad=0 if mode == 'train' or mode == 'unlabeled' else 0.5,
                                  rect=self.args.rect or mode == 'val',
                                  rank=rank,
                                  workers=self.args.workers,
                                  close_mosaic=self.args.close_mosaic != 0,
                                  prefix=colorstr(f'{mode}: '),
-                                 shuffle=mode == 'train',
+                                 shuffle=mode == 'train' or mode == 'unlabeled',
                                  seed=self.args.seed)[0] if self.args.v5loader else \
             build_dataloader(self.args, batch_size, img_path=dataset_path, stride=gs, rank=rank, mode=mode,
                              rect=mode == 'val', data_info=self.data)[0]

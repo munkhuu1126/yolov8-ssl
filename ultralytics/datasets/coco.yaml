@@ -12,6 +12,7 @@ path: ../datasets/coco  # dataset root dir
 train: train2017.txt  # train images (relative to 'path') 118287 images
 val: val2017.txt  # val images (relative to 'path') 5000 images
 test: test-dev2017.txt  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+unlabeled: unlabeled.txt
 
 # Classes
 names:
@@ -111,5 +112,6 @@ download: |
   # Download data
   urls = ['http://images.cocodataset.org/zips/train2017.zip',  # 19G, 118k images
           'http://images.cocodataset.org/zips/val2017.zip',  # 1G, 5k images
-          'http://images.cocodataset.org/zips/test2017.zip']  # 7G, 41k images (optional)
-  download(urls, dir=dir / 'images', threads=3)
+          'http://images.cocodataset.org/zips/test2017.zip',
+          'http://images.cocodataset.org/zips/unlabeled2017.zip']  # 7G, 41k images (optional)
+  download(urls, dir=dir / 'images', threads=4)

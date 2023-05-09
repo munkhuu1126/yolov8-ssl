@@ -102,7 +102,7 @@ class BaseTrainer:
             yaml_save(self.save_dir / 'args.yaml', vars(self.args))  # save run args
         self.last, self.best = self.wdir / 'last.pt', self.wdir / 'best.pt'  # checkpoint paths
         self.save_period = self.args.save_period
-
+        self.criterion2 = nn.MSELoss()
         self.batch_size = self.args.batch
         self.epochs = self.args.epochs
         self.start_epoch = 0
@@ -125,7 +125,9 @@ class BaseTrainer:
         except Exception as e:
             raise RuntimeError(emojis(f"Dataset '{clean_url(self.args.data)}' error ❌ {e}")) from e
 
-        self.trainset, self.testset = self.get_dataset(self.data)
+        self.trainset, self.testset, self.unlabeledset = self.get_dataset(self.data)
+       
+        # self.trainset = torch.utils.data.Subset(self.trainset, range(int(len(self.trainset)*0.1)))
         self.ema = None
 
         # Optimization utils init
@@ -248,6 +250,7 @@ class BaseTrainer:
         # Dataloaders
         batch_size = self.batch_size // world_size if world_size > 1 else self.batch_size
         self.train_loader = self.get_dataloader(self.trainset, batch_size=batch_size, rank=RANK, mode='train')
+        self.unlabeled_loader = self.get_dataloader(self.unlabeledset, batch_size = batch_size, rank=RANK, mode='unlabeled') # unlabeled data
         if RANK in (-1, 0):
             self.test_loader = self.get_dataloader(self.testset, batch_size=batch_size * 2, rank=-1, mode='val')
             self.validator = self.get_validator()
@@ -298,10 +301,15 @@ class BaseTrainer:
 
             if RANK in (-1, 0):
                 LOGGER.info(self.progress_string())
-                pbar = tqdm(enumerate(self.train_loader), total=nb, bar_format=TQDM_BAR_FORMAT)
+                pbar = tqdm(enumerate(zip(self.train_loader,self.unlabeled_loader)), total=nb, bar_format=TQDM_BAR_FORMAT)
+                # pbar2 = tqdm(enumerate(self.unlabeled_loader), total=nb2, bar_format=TQDM_BAR_FORMAT) # new code
+                
             self.tloss = None
             self.optimizer.zero_grad()
-            for i, batch in pbar:
+            for i, (batch,batch2) in pbar: #new code here. remove batch2 to keep the original
+                # print(f"batch2: {batch2['img'].size}" )
+                # print(f"batch: {batch['img'].size}")
+                # raise SystemExit
                 self.run_callbacks('on_train_batch_start')
                 # Warmup
                 ni = i + nb * epoch
@@ -318,7 +326,11 @@ class BaseTrainer:
                 # Forward
                 with torch.cuda.amp.autocast(self.amp):
                     batch = self.preprocess_batch(batch)
-                    preds = self.model(batch['img'])
+                    # new code
+                    batch2 = self.preprocess_batch(batch2)
+                    preds2 = self.model(batch2['img'])
+                    # new code end
+                    preds= self.model(batch['img'])
                     self.loss, self.loss_items = self.criterion(preds, batch)
                     if RANK != -1:
                         self.loss *= world_size
@@ -327,12 +339,19 @@ class BaseTrainer:
 
                 # Backward
                 self.scaler.scale(self.loss).backward()
+                # new code
+                with torch.cuda.amp.autocast(self.amp):
+                    preds3 = self.model(batch2['img'])
 
+                    self.loss2 = self.criterion2(preds2[0], preds3[0])+ self.criterion2(preds2[1], preds3[1])+ self.criterion2(preds2[2], preds3[2])
+                
+                self.scaler.scale(self.loss2).backward()
+                # new code end
                 # Optimize - https://pytorch.org/docs/master/notes/amp_examples.html
                 if ni - last_opt_step >= self.accumulate:
                     self.optimizer_step()
                     last_opt_step = ni
-
+                
                 # Log
                 mem = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G'  # (GB)
                 loss_len = self.tloss.shape[0] if len(self.tloss.size()) else 1
@@ -420,7 +439,7 @@ class BaseTrainer:
         """
         Get train, val path from data dict if it exists. Returns None if data format is not recognized.
         """
-        return data['train'], data.get('val') or data.get('test')
+        return data['train'], data.get('val') or data.get('test'), data.get('unlabeled')
 
     def setup_model(self):
         """

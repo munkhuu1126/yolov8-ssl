@@ -58,13 +58,15 @@ class YOLODataset(BaseDataset):
                  use_segments=False,
                  use_keypoints=False,
                  data=None,
-                 classes=None):
+                 classes=None,
+                 mode="train"):
+        self.mode = mode
         self.use_segments = use_segments
         self.use_keypoints = use_keypoints
         self.data = data
         assert not (self.use_segments and self.use_keypoints), 'Can not use both segments and keypoints.'
-        super().__init__(img_path, imgsz, cache, augment, hyp, prefix, rect, batch_size, stride, pad, single_cls,
-                         classes)
+        super().__init__(img_path, imgsz, cache, True, hyp, prefix, rect, batch_size, stride, pad, single_cls,
+                         classes, mode)
 
     def cache_labels(self, path=Path('./labels.cache')):
         """Cache dataset labels, check images and read shapes.
@@ -128,6 +130,8 @@ class YOLODataset(BaseDataset):
 
     def get_labels(self):
         """Returns dictionary of labels for YOLO training."""
+        # if self.mode == 'unlabeled':
+        #     return
         self.label_files = img2label_paths(self.im_files)
         cache_path = Path(self.label_files[0]).parent.with_suffix('.cache')
         try:
@@ -147,8 +151,8 @@ class YOLODataset(BaseDataset):
             tqdm(None, desc=self.prefix + d, total=n, initial=n, bar_format=TQDM_BAR_FORMAT)  # display cache results
             if cache['msgs']:
                 LOGGER.info('\n'.join(cache['msgs']))  # display warnings
-        if nf == 0:  # number of labels found
-            raise FileNotFoundError(f'{self.prefix}No labels found in {cache_path}, can not start training. {HELP_URL}')
+        # if nf == 0:  # number of labels found
+        #     raise FileNotFoundError(f'{self.prefix}No labels found in {cache_path}, can not start training. {HELP_URL}')
 
         # Read cache
         [cache.pop(k) for k in ('hash', 'version', 'msgs')]  # remove items
@@ -165,8 +169,8 @@ class YOLODataset(BaseDataset):
                 'To avoid this please supply either a detect or segment dataset, not a detect-segment mixed dataset.')
             for lb in labels:
                 lb['segments'] = []
-        if len_cls == 0:
-            raise ValueError(f'All labels empty in {cache_path}, can not start training without labels. {HELP_URL}')
+        # if len_cls == 0:
+        #     raise ValueError(f'All labels empty in {cache_path}, can not start training without labels. {HELP_URL}')
         return labels
 
     # TODO: use hyp config to set all these augmentations
